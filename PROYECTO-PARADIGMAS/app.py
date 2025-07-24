@@ -8,13 +8,17 @@ from sklearn.ensemble import IsolationForest
 import plotly.express as px
 import google.generativeai as genai
 
-# ======= Configuración general =======
+import PyPDF2
+import io
+import json
+
+# Configuración general
 genai.configure(api_key="AIzaSyB77sw3lhzRhfRrdFMntOhxRLciX9wuuxU")
 st.set_page_config(page_title="Análisis Inteligente de Datos", layout="wide")
 st.title("🔎 Análisis Automatizado de Datos")
-st.markdown("Sube tu archivo **CSV o Excel** y descubre insights al instante.")
+st.markdown("Sube tu archivo **CSV, Excel, PDF, TXT o JSON** y descubre insights al instante.")
 
-# ======= Función de resumen robusta =======
+# Función de resumen robusta
 def resumen_insights(df, num_cols, cat_cols):
     st.markdown("### 📝 **Resumen rápido de insights**")
     if not num_cols:
@@ -33,7 +37,7 @@ def resumen_insights(df, num_cols, cat_cols):
             top = mode.iloc[0] if not mode.empty else "Sin valor dominante"
             st.write(f"- **{col}:** {df[col].nunique()} categorías únicas, Top: {top}")
 
-# ======= Funciones utilitarias =======
+# Funciones utilitarias
 def detectar_tipos(df):
     tipo_vars = {}
     for col in df.columns:
@@ -103,19 +107,63 @@ tab1, tab2 = st.tabs(["Análisis automático", "🤖 Asistente IA (Gemini)"])
 
 # ======== Tab 1: Analítica tradicional =========
 with tab1:
-    archivo = st.file_uploader("Selecciona un archivo CSV o Excel", type=["csv", "xlsx"], key="fileuploader")
+    archivo = st.file_uploader(
+        "Selecciona un archivo (CSV, Excel, PDF, TXT o JSON)", 
+        type=["csv", "xlsx", "pdf", "txt", "json"], 
+        key="fileuploader"
+    )
     df = None
 
-    # Cargar y guardar DataFrame en session_state
+    # Borra el texto_extraido al cargar uno nuevo
+    st.session_state['texto_extraido'] = None
+
     if archivo:
         try:
             if archivo.name.endswith(".csv"):
                 df = pd.read_csv(archivo)
             elif archivo.name.endswith(".xlsx"):
                 df = pd.read_excel(archivo)
-            st.success("¡Archivo cargado exitosamente!")
-            st.write("### Vista previa de los datos", df.head())
-            st.session_state['df'] = df
+            elif archivo.name.endswith(".json"):
+                df = pd.read_json(archivo)
+                if not isinstance(df, pd.DataFrame):
+                    st.warning("El JSON no contiene datos tabulares reconocibles.")
+                    df = None
+            elif archivo.name.endswith(".txt"):
+                archivo.seek(0)
+                try:
+                    df = pd.read_csv(archivo, sep=None, engine='python')
+                except Exception:
+                    archivo.seek(0)
+                    txt = archivo.read().decode('utf-8', errors='ignore')
+                    st.info("Archivo TXT cargado como texto plano (no como tabla):")
+                    st.text(txt[:2000])
+                    st.session_state['texto_extraido'] = txt
+                    df = None
+            elif archivo.name.endswith(".pdf"):
+                pdf_reader = PyPDF2.PdfReader(archivo)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text() or ""
+                if text.strip():
+                    st.info("Texto extraído del PDF (primeros 2000 caracteres):")
+                    st.text(text[:2000])
+                    st.session_state['texto_extraido'] = text
+                try:
+                    import tabula
+                    archivo.seek(0)
+                    st.warning("Si el PDF contiene tablas, te recomendamos extraerlas a Excel para mejor análisis.")
+                except ImportError:
+                    st.info("Instala tabula-py para intentar extraer tablas de PDF.")
+                df = None
+
+            if df is not None and not df.empty:
+                st.success("¡Archivo cargado exitosamente!")
+                st.write("### Vista previa de los datos", df.head())
+                st.session_state['df'] = df
+            elif df is None and st.session_state.get('texto_extraido'):
+                st.success("Texto cargado y listo para análisis con IA (pestaña Gemini).")
+            elif df is None:
+                st.info("No se pudo cargar como tabla estructurada. Si es texto plano, revisa el contenido mostrado arriba.")
         except Exception as e:
             st.error(f"Error al cargar el archivo: {e}")
     elif 'df' in st.session_state:
@@ -132,9 +180,7 @@ with tab1:
         num_cols = tipo_df[tipo_df["Tipo"] == "Numérica"]["Variable"].tolist()
         cat_cols = tipo_df[tipo_df["Tipo"] == "Categórica"]["Variable"].tolist()
 
-        # --- Resumen robusto aquí ---
         resumen_insights(df, num_cols, cat_cols)
-
         st.write("### Matriz de correlación:")
         mostrar_correlacion(df, num_cols)
 
@@ -183,16 +229,34 @@ with tab1:
 # ======== Tab 2: Asistente IA Gemini =========
 with tab2:
     st.markdown("## 🤖 Asistente Inteligente (Gemini)")
+
     df = st.session_state.get('df', None)
-    if df is not None and not df.empty:
-        st.write("Hazle preguntas a la IA sobre tu conjunto de datos (máx 10 primeras filas enviadas). Por ejemplo: '¿Qué variables parecen estar más relacionadas?' o '¿Hay patrones curiosos?'")
-        pregunta = st.text_area("Pregunta para Gemini:", placeholder="¿Qué observas en los datos?", key="pregunta_gemini")
+    texto_extraido = st.session_state.get('texto_extraido', None)
+
+    if (df is not None and not df.empty) or (texto_extraido is not None and len(texto_extraido.strip()) > 0):
+        st.write("Hazle preguntas a la IA sobre tu archivo. Ejemplos:")
+        st.markdown("- Para datos tabulares: '¿Qué variables parecen estar más relacionadas?'\n"
+                    "- Para texto/pdf: '¿Cuáles son los temas principales?' o 'Hazme un resumen.'")
+
+        pregunta = st.text_area("Pregunta para Gemini:", placeholder="¿Qué observas en los datos o en el texto?", key="pregunta_gemini")
+
         if st.button("Preguntar a Gemini"):
-            muestra = df.head(10).to_csv(index=False)
-            prompt = (
-                f"Tengo este dataset en formato CSV:\n{muestra}\n"
-                f"Pregunta: {pregunta}\nPor favor, responde como si fueras un analista de datos profesional."
-            )
+            if df is not None and not df.empty:
+                muestra = df.head(10).to_csv(index=False)
+                prompt = (
+                    f"Tengo este dataset en formato CSV:\n{muestra}\n"
+                    f"Pregunta: {pregunta}\nPor favor, responde como si fueras un analista de datos profesional."
+                )
+            elif texto_extraido:
+                prompt = (
+                    f"Tengo el siguiente texto extraído de un archivo (puede ser PDF, TXT, etc):\n"
+                    f"{texto_extraido[:3000]}\n"
+                    f"Pregunta: {pregunta}\nPor favor, responde de manera concisa y profesional."
+                )
+            else:
+                st.warning("No hay datos ni texto cargado para enviar a la IA.")
+                st.stop()
+
             try:
                 modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest')
                 respuesta = modelo.generate_content(prompt)
@@ -201,4 +265,4 @@ with tab2:
             except Exception as e:
                 st.error(f"Error al comunicarse con Gemini: {e}")
     else:
-        st.info("Primero sube un archivo de datos en la pestaña 'Análisis automático' para habilitar el asistente Gemini.")
+        st.info("Primero sube un archivo de datos o texto en la pestaña 'Análisis automático' para habilitar el asistente Gemini.")
