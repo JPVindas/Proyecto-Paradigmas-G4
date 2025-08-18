@@ -14,7 +14,7 @@ import json
 
 # :: inicio CONFIGURACION GENERAL ::
 
-genai.configure(api_key="AIzaSyB77sw3lhzRhfRrdFMntOhxRLciX9wuuxU") # configuracion API Gemini para asistente IA.
+genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc") # configuracion API Gemini para asistente IA.
 st.set_page_config(page_title="Análisis de Documentos", layout="wide")
 
 # :: fin CONFIGURACION GENERAL :: 
@@ -36,7 +36,7 @@ tab1, tab2 = st.tabs(["Análisis automático", "Asistente IA (Gemini)"])
 with tab1:
     archivo = st.file_uploader(
         "Selecciona un archivo de tu explorador o arrástrarlo a la vista para comenzar tu análisis.", 
-        type=["pdf", "txt"], # solo permite subir archivos .PDF y .TXT
+        type=["pdf", "txt", "doc", "docx"], # solo permite subir archivos .PDF y .TXT
         key="fileuploader"
     )
     df = None
@@ -53,46 +53,48 @@ with tab1:
                     df = pd.read_csv(archivo, sep=None, engine='python')
                 except Exception:
                     archivo.seek(0)
-                    txt = archivo.read().decode('utf-8', errors='ignore') # de binario a texto legible y omite caracteres invalidos
+                    txt = archivo.read().decode('utf-8', errors='ignore') # de binario a texto legible y omite caracteres invalidos.
                     st.markdown(
                         "<h2 style='text-align: center;'>Archivo .TXT cargado exitosamente</h2>", 
                         unsafe_allow_html=True
                     )
                     st.session_state['texto_extraido'] = txt # guarda el archivo en una variable para no tener que cargarlo otra vez.
+            
             elif archivo.name.endswith(".pdf"):
-                pdf_reader = PyPDF2.PdfReader(archivo)
+                pdf_reader = PyPDF2.PdfReader(archivo) # libreria PyPDF2 lee el archivo.
                 text = ""
                 for page in pdf_reader.pages:
-                    text += page.extract_text() or ""
+                    text += page.extract_text() or "" # extrae texto de cada pagina por medio del for.
                 if text.strip():
-                    st.session_state['texto_extraido'] = text
-
+                    st.session_state['texto_extraido'] = text # guarda el texto en una variable para no tener que cargarlo otra vez.
                 df = None
-            elif df is None:
-                st.info("No se pudo cargar como tabla estructurada. Si es texto plano, revisa el contenido mostrado arriba.")
+            
+            else:
+                st.error("Formato de archivo no soportado.")
 
         except Exception as e:
             st.error(f"Error al cargar el archivo: {e}")
 
         texto_extraido = st.session_state.get('texto_extraido', "") # llamamos a la variable anteriormente establecida.
 
-        # prompt predeterminado para mostrar resumen del contenido del archivo
-        prompt = (
-            f"Tengo el siguiente texto extraído de un archivo (puede ser PDF, TXT, etc):\n"
-            f"{texto_extraido}\n"
-            f"Necesito que hagas un resumen del archivo. Por favor, responde de manera breve y profesional pero divide la información en párrafos y bulletpoints si es necesario."
-        )
-        try:
-            modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest') # modelo de gemini que se esta usando.
-            respuesta = modelo.generate_content(prompt)
-            st.write("**Respuesta Generada por Gemini 1.5:**")
-            # respuesta generada a raiz del prompt y texto extraido
-            st.markdown(
-                f"<div style='text-align: justify;'>{respuesta.text}</div>",
-                unsafe_allow_html=True
+        if texto_extraido:
+            # prompt predeterminado para mostrar resumen del contenido del archivo
+            prompt = (
+                f"Tengo el siguiente texto extraído de un archivo (puede ser PDF, TXT, etc):\n"
+                f"{texto_extraido}\n"
+                f"Necesito que hagas un resumen del archivo. Por favor, responde de manera breve y profesional pero divide la información en párrafos y bulletpoints si es necesario."
             )
-        except Exception as e:
-            st.error(f"Error al comunicarse con Gemini: {e}")
+            try:
+                modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest') # modelo de gemini que se esta usando.
+                respuesta = modelo.generate_content(prompt)
+                st.write("**Respuesta Generada por Gemini 1.5:**")
+                # respuesta generada a raiz del prompt y texto extraido
+                st.markdown(
+                    f"<div style='text-align: justify;'>{respuesta.text}</div>",
+                    unsafe_allow_html=True
+                )
+            except Exception as e:
+                st.error(f"Error al comunicarse con Gemini: {e}")
 
     elif 'df' in st.session_state:
         df = st.session_state['df']

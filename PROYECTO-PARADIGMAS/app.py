@@ -13,7 +13,7 @@ import io
 import json
 
 # Configuración general
-genai.configure(api_key="AIzaSyB77sw3lhzRhfRrdFMntOhxRLciX9wuuxU")
+genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")
 st.set_page_config(page_title="Análisis Inteligente de Datos", layout="wide")
 st.title("🔎 Análisis Automatizado de Datos")
 st.markdown("Sube tu archivo **CSV, Excel, PDF, TXT o JSON** y descubre insights al instante.")
