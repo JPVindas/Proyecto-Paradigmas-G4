@@ -7,3 +7,8 @@ pip install scikit-learn
 pip install plotly 
 pip install google-generativeai
 pip install PyPDF2
+
+// nuevas instalaciones 18 agosto 2025 //
+
+pip install python-docx
+pip install striprtf
