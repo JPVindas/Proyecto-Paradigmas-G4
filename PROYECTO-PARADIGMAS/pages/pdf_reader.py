@@ -1,16 +1,9 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from sklearn.ensemble import IsolationForest
-import plotly.express as px
-import google.generativeai as genai
 
-import PyPDF2
-import io
-import json
+import google.generativeai as genai # usar API de Gemini
+import PyPDF2 # leer archivos .PDF
+import docx # leer archivos .DOC & .DOCX
+from striprtf.striprtf import rtf_to_text # leer archivos .RTF
 
 # :: inicio CONFIGURACION GENERAL ::
 
@@ -36,10 +29,9 @@ tab1, tab2 = st.tabs(["Análisis automático", "Asistente IA (Gemini)"])
 with tab1:
     archivo = st.file_uploader(
         "Selecciona un archivo de tu explorador o arrástrarlo a la vista para comenzar tu análisis.", 
-        type=["pdf", "txt", "doc", "docx"], # solo permite subir archivos .PDF y .TXT
+        type=["pdf", "txt", "doc", "docx", "rtf"], # solo permite subir archivos .PDF, .TXT, .DOC, .DOCX y .RTF
         key="fileuploader"
     )
-    df = None
 
     # Comando borra archivo anterior cuando se introduce uno nuevo.
     # Permite que la info. no se mezcle.
@@ -49,16 +41,12 @@ with tab1:
         try:
             if archivo.name.endswith(".txt"): 
                 archivo.seek(0) # lee el archivo desde la primera fila. 
-                try:
-                    df = pd.read_csv(archivo, sep=None, engine='python')
-                except Exception:
-                    archivo.seek(0)
-                    txt = archivo.read().decode('utf-8', errors='ignore') # de binario a texto legible y omite caracteres invalidos.
-                    st.markdown(
-                        "<h2 style='text-align: center;'>Archivo .TXT cargado exitosamente</h2>", 
-                        unsafe_allow_html=True
-                    )
-                    st.session_state['texto_extraido'] = txt # guarda el archivo en una variable para no tener que cargarlo otra vez.
+                txt = archivo.read().decode('utf-8', errors='ignore') # de binario a texto legible y omite caracteres invalidos.
+                st.markdown(
+                    "<h2 style='text-align: center;'>Archivo .TXT cargado exitosamente</h2>", 
+                    unsafe_allow_html=True
+                )
+                st.session_state['texto_extraido'] = txt # guarda el archivo en una variable para no tener que cargarlo otra vez.
             
             elif archivo.name.endswith(".pdf"):
                 pdf_reader = PyPDF2.PdfReader(archivo) # libreria PyPDF2 lee el archivo.
@@ -67,8 +55,34 @@ with tab1:
                     text += page.extract_text() or "" # extrae texto de cada pagina por medio del for.
                 if text.strip():
                     st.session_state['texto_extraido'] = text # guarda el texto en una variable para no tener que cargarlo otra vez.
-                df = None
-            
+                    st.markdown(
+                        "<h2 style='text-align: center;'>Documento .PDF cargado exitosamente</h2>", 
+                        unsafe_allow_html=True
+                    )
+                        
+            elif archivo.name.endswith(".docx") or archivo.name.endswith(".doc"):
+                # variable que almacena toda la info. del archivo.
+                doc = docx.Document(archivo)
+                # varaible que almacena texto legible del archivo (doc).
+                text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+                if text.strip():
+                    st.session_state['texto_extraido'] = text # guarda el texto en una variable para no tener que cargarlo otra vez.
+                    st.markdown(
+                        "<h2 style='text-align: center;'>Documento Word cargado exitosamente</h2>", 
+                        unsafe_allow_html=True
+                    )
+
+            elif archivo.name.endswith(".rtf"):
+                archivo.seek(0) # lee el archivo desde la primera fila. 
+                rtf_content = archivo.read().decode('utf-8', errors='ignore') # de binario a texto legible y omite caracteres invalidos.
+                text = rtf_to_text(rtf_content)  # varaible que almacena texto legible del archivo.
+                if text.strip():
+                    st.session_state['texto_extraido'] = text # guarda el texto en una variable para no tener que cargarlo otra vez.
+                    st.markdown(
+                        "<h2 style='text-align: center;'>Documento de Formato de Texto Enriquecido cargado exitosamente</h2>", 
+                        unsafe_allow_html=True
+                    )
+
             else:
                 st.error("Formato de archivo no soportado.")
 
@@ -96,8 +110,6 @@ with tab1:
             except Exception as e:
                 st.error(f"Error al comunicarse con Gemini: {e}")
 
-    elif 'df' in st.session_state:
-        df = st.session_state['df']
 # :: fin ESTRUCTURA TAB1 ::
 
 # :: inicio ESTRUCTURA TAB2 ::
@@ -107,7 +119,6 @@ with tab2:
         unsafe_allow_html=True
     )
 
-    df = st.session_state.get('df', None)
     texto_extraido = st.session_state.get('texto_extraido', None)
 
     if (texto_extraido is not None and len(texto_extraido.strip()) > 0):
