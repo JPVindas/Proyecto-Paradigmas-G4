@@ -91,7 +91,7 @@ with tab2:
 
     if "imagen_extraida" in st.session_state:
         st.markdown(
-            "<p style='text-align: center;'>Realizas preguntas a <span style='font-style: italic;'>Gemini</span> para obtener el mejor entendimiento de la imagen insertada.</p>",
+            "<p style='text-align: center;'>Realiza preguntas a <span style='font-style: italic;'>Gemini</span> para obtener el mejor entendimiento de la imagen insertada.</p>",
             unsafe_allow_html=True
         )
 
@@ -116,6 +116,9 @@ with tab2:
                 try:
                     # generacion de respuesta similar al de ventana de Analisis
                     modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+
+                    # metodo para que Gemini pueda interpretar texto + imagen con libreria google-generativeai.
+                    # mime_type es el tipo de archivo y en el data se pasan los bytes de la imagen.
                     respuesta = modelo.generate_content([
                         prompt,
                         {"mime_type": "image/png", "data": img_bytes}

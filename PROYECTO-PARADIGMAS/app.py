@@ -52,67 +52,69 @@ def downcast_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 @st.cache_data(show_spinner=False, max_entries=3)
-def cargar_dataframe(archivo) -> pd.DataFrame:
-    """Carga CSV/Excel/JSON desde archivo temporal (manejo robusto encoding)."""
+# metodo para cargar del DataFrame (recibe el archivo subido)
+def cargar_dataframe(archivo) -> pd.DataFrame: 
+
+    # obtiene nombre de archivo y lo pasa a minusculas.
     name = archivo.name.lower()
     suffix = os.path.splitext(name)[1]
+
+    # genera archivo temporal (archivo subido clonado) en disco con para facilitar lectura.
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         tmp_file.write(archivo.getvalue())
         tmp_path = tmp_file.name
+
     try:
         if name.endswith('.csv'):
             try:
+                # lectura de archivo .CSV con libreria 'pandas'.
                 df = pd.read_csv(tmp_path, low_memory=False)
             except Exception:
+                # diferente metodo de lectura usado para resolucion de problemas de caracteres
                 df = pd.read_csv(tmp_path, encoding='latin1', low_memory=False)
-        elif name.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(tmp_path)
-        elif name.endswith('.json'):
-            df = pd.read_json(tmp_path)
-        else:
-            raise ValueError("Formato no soportado por cargar_dataframe")
-        return downcast_df(df)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
 
-def extraer_texto_pdf(archivo) -> str:
-    """Extrae texto de un PDF (temporal)."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(archivo.getvalue())
-        tmp_path = tmp.name
-    try:
-        texto = ""
-        with open(tmp_path, "rb") as f:
-            reader = PyPDF2.PdfReader(f)
-            for p in reader.pages:
-                texto += p.extract_text() or ""
-        return texto
+        elif name.endswith(('.xls', '.xlsx')):
+            # lectura de archivo .XLS / .XLSX con libreria 'pandas'.
+            df = pd.read_excel(tmp_path)
+
+        else:
+            raise ValueError("Formato no soportado.")
+
+        # retorna el DataFrame    
+        return downcast_df(df)
+
     finally:
         try:
+            # borra archivo temporal
             os.unlink(tmp_path)
         except Exception:
             pass
 
 @st.cache_data(show_spinner=False, max_entries=10)
+# metodo para detectar tipos de datos en el DataFrame (recibe el DataFrame)
 def detectar_tipos(df: pd.DataFrame) -> pd.DataFrame:
-    """Detecta si cada variable es Numérica, Categórica o Temporal."""
+    # lista vacia que almacena los tipos.
     tipo_vars = []
+
     for col in df.columns:
         col_data = df[col]
         try:
+            # "si la columna es tipo date, datetime..."
             if pd.api.types.is_datetime64_any_dtype(col_data):
                 tipo = "Temporal"
+            # "si la columna es tipo int, float, ..."
             elif pd.api.types.is_numeric_dtype(col_data):
-                nunique = col_data.nunique(dropna=True)
-                tipo = "Categórica" if (nunique < 15 or nunique / max(1, len(col_data)) < 0.05) else "Numérica"
+                tipo = "Numérica"
+            # "de lo contrario..."
             else:
                 tipo = "Categórica"
         except Exception:
             tipo = "Categórica"
+
+        # lista = [nombre_columna | tipo_columna]
         tipo_vars.append((col, tipo))
+
+    # retorna ud DataFrame con la lista de [tipo_vars] como tabla.  
     return pd.DataFrame(tipo_vars, columns=["Variable", "Tipo"])
 
 

@@ -1,8 +1,8 @@
 # leer_csv.py
-import streamlit as st
-import pandas as pd
-import numpy as np
-import google.generativeai as genai
+import streamlit as st # type: ignore
+import pandas as pd # type: ignore
+import numpy as np # type: ignore
+import google.generativeai as genai # type: ignore
 import os
 import tempfile
 
@@ -22,56 +22,62 @@ from app import (
     plot_clusters_pca,
 )
 
-# =========================
-# Configuración de la página
-# =========================
-st.set_page_config(
-    page_title="🔎 Análisis Automatizado de Datos",
-    layout="wide"  # Esto hace que toda la app use el ancho completo
+# :: inicio CONFIGURACION GENERAL ::
+
+genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc") # configuracion API Gemini para asistente IA.
+st.set_page_config(page_title="Análisis Automatizado de Datos", layout="wide")
+
+# :: fin CONFIGURACION GENERAL :: 
+
+# :: inicio VISTA GENERAL ANALISIS DE IMAGENES ::
+
+st.markdown(
+    "<h1 style='text-align: center;'>Análisis Automatizado de Datos</h1>", 
+    unsafe_allow_html=True
+)
+st.markdown(
+    "<p style='text-align: center;'>Puedes subir cualquier archivo tipo .CSV o .XLSX para que Gemini interprete lo insertado.</p>", 
+    unsafe_allow_html=True
 )
 
-# Configurar API Gemini
-genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")
+# :: inicio FUNC SELECT VARIABLES REPRESENTATIVAS ::
 
-# =========================
-# Título
-# =========================
-st.title("🔎 Análisis Automatizado de Datos")
-st.markdown("Sube tu archivo CSV descubre insights al instante.")
-
-# =========================
-# Función para seleccionar variables representativas
-# =========================
 def seleccionar_variables(df, num_cols, cat_cols):
     if num_cols:
+        # varianza de las columnas numericas ordenadas de mayor a menor.
         var_varianza = df[num_cols].var().sort_values(ascending=False)
+        # utiliza columnas con mayor varianza (max. 3 columnas).
         selected_nums = var_varianza.index[:min(3, len(var_varianza))].tolist()
     else:
+        # lista vacia si no hay columnas numericas.
         selected_nums = []
 
-    selected_cat = None
-    best_nonnull = -1
+    selected_cat = None # columna categorica resaltante
+    best_nonnull = -1 
+    # "por cada columna categorica"
     for c in cat_cols:
-        non_null = df[c].notna().sum()
-        unique_ct = df[c].nunique(dropna=True)
+        non_null = df[c].notna().sum() # CANTIDAD de valores no nulos
+        unique_ct = df[c].nunique(dropna=True) # CANTIDAD de categorias unicas (ej: soltero, casado, divorciado).
+
+        # criterio que define la mejor columna categorica
         if unique_ct <= 50 and non_null > best_nonnull:
             selected_cat = c
             best_nonnull = non_null
 
+    # regresa las 3 columnas numericas y la categorica seleccionada.
     return selected_nums, selected_cat
 
-# =========================
-# Tabs
-# =========================
-tab1, tab2 = st.tabs(["Análisis automático", "🤖 Asistente IA"])
+# :: fin FUNC SELECT VARIABLES REPRESENTATIVAS ::
 
-# =========================
-# Tab 1: Análisis automático
-# =========================
+
+tab1, tab2 = st.tabs(["Análisis automático", "Asistente IA (Gemini)"])
+
+# :: inicio ESTRUCTURA TAB1 ::
 with tab1:
+    # [archivo subido].
     archivo = st.file_uploader(
-        "Sube CSV, Excel, JSON, PDF o TXT",
-        type=["csv", "xlsx", "json", "pdf", "txt"]
+        "Selecciona un archivo de tu explorador o arrástrarlo a la vista para comenzar tu análisis.",
+        type=["csv", "xls", "xlsx"] # solo puede seleccionar archivos tipo .CSV, .XLS o .XLSX
     )
     df = None
     texto_extraido = ""
@@ -79,127 +85,149 @@ with tab1:
     if archivo:
         name = archivo.name.lower()
         try:
-            if name.endswith((".csv", ".xlsx", ".json")):
+            if name.endswith((".csv", ".xls", ".xlsx")):
                 with st.spinner("Cargando datos..."):
+                    # valor retornado del DataFrame con el [archivo subido].
                     df = cargar_dataframe(archivo)
+
+                    # guarda el DataFrame en una variable para no tener que cargarlo otra vez.
                     st.session_state['df'] = df
+
+                    # especificaciones generales del dataframe y muestra las primeras 10 inserciones en la tabla.
                     st.success(f"Datos cargados: {len(df)} filas × {len(df.columns)} columnas")
                     st.dataframe(df.head(min(10, len(df))), use_container_width=True)
 
-            elif name.endswith(".pdf"):
-                with st.spinner("Extrayendo texto de PDF..."):
-                    texto_extraido = extraer_texto_pdf(archivo)
-                    st.session_state['texto_extraido'] = texto_extraido
-                    st.text_area("Texto extraído (preview)", value=texto_extraido[:3000], height=200)
+                    # recupera el DataFrame
+                    df = st.session_state.get('df', None)
 
-            else:  # TXT
-                contenido = archivo.read().decode('utf-8', errors='ignore')
-                st.session_state['texto_extraido'] = contenido
-                st.text_area("Contenido (preview)", value=contenido[:3000], height=200)
+                    if df is not None and not df.empty:
+                        try:
+                            with st.spinner("Analizando estructura de datos..."):
+                                # variable que almacena el DataFrame retornado con los tipos de datos del DataFrame original.
+                                tipo_df = detectar_tipos(df)
+
+                            st.subheader("Tipos de Datos Detectados")
+                            # muestra dataframe cargado de la variable [tipo_df]
+                            st.dataframe(tipo_df, use_container_width=True)
+
+                            # almacena en variables las columnas que sean categoricas y las numericas.
+                            num_cols = tipo_df[tipo_df["Tipo"] == "Numérica"]["Variable"].tolist()
+                            cat_cols = tipo_df[tipo_df["Tipo"] == "Categórica"]["Variable"].tolist()
+
+                            # variable que almacena estadisticas descriptivas basicas.
+                            desc = df[num_cols].describe()
+
+                            # cambiar el nombre predeterminado del indice.
+                            desc = desc.rename(index= {
+                                "count": "cant",
+                                "mean": "prom",
+                                "std": "std",
+                                "min": "min",
+                                "25%": "25%",
+                                "50%": "med",
+                                "75%": "75%",
+                                "max": "max"
+                            })
+
+                            # genera DataFrame con estadisticas descriptivas basicas para las columnas numericas del DataFrame original.
+                            st.subheader("Estadísticas Descriptivas (Numéricas)")
+                            st.dataframe(desc, use_container_width=True)
+
+                            st.subheader("Visualizaciones Gráficas")
+                            selected_nums, selected_cat = seleccionar_variables(df, num_cols, cat_cols)
+
+                            # mostrar variables seleccionadas en una tabla intuitiva.
+                            st.markdown("Variables Seleccionadas")
+                            num_cols_display = 3
+                            data = {f"Numérica {i+1}": [] for i in range(num_cols_display)}
+                            data["Categórica"] = []
+
+                            for i in range(0, len(selected_nums), num_cols_display):
+                                fila = []
+                                # variables numericas divididas en 3 columnas.
+                                for j in range(num_cols_display):
+                                    if i + j < len(selected_nums):
+                                        data[f"Numérica {j+1}"].append(selected_nums[i+j])
+                                    else:
+                                        data[f"Numérica {j+1}"].append("")
+                                
+                                # variable categorica agregada en la ultima columna.
+                                if i == 0 and selected_cat:
+                                    data["Categórica"].append(selected_cat)
+
+                                else:
+                                    data["Categórica"].append("")
+
+                            # se convierte la tabla a un DataFrame para mejor visualizacion.
+                            tabla = pd.DataFrame(data)
+                            st.table(tabla)
+
+                            # --------------------
+                            # Generar gráficos
+                            # --------------------
+                            for var in selected_nums:
+                                fig_h = generar_histograma_claro(df, var)
+                                if fig_h:
+                                    st.plotly_chart(fig_h, use_container_width=True)
+
+                            fig_box = generar_boxplot_claro(df, selected_nums, max_display=6)
+                            if fig_box:
+                                st.plotly_chart(fig_box, use_container_width=True)
+
+                            fig_corr = generar_correlacion_clara(df, num_cols)
+                            if fig_corr:
+                                st.plotly_chart(fig_corr, use_container_width=True)
+
+                            if selected_cat:
+                                fig_bar = generar_barras_claras(df, selected_cat, top_n=20)
+                                if fig_bar:
+                                    st.plotly_chart(fig_bar, use_container_width=True)
+
+                            if selected_nums:
+                                fig_vb = generar_violin_y_box(df, selected_nums[0])
+                                if fig_vb:
+                                    st.plotly_chart(fig_vb, use_container_width=True)
+
+                            # --------------------
+                            # Outliers
+                            # --------------------
+                            st.subheader("⚠️ Detección de outliers")
+                            if selected_nums:
+                                contamination = st.slider("Sensibilidad outliers", 0.01, 0.2, 0.05, 0.01, key="contamination_csv")
+                                outliers = detectar_outliers(df, selected_nums, contamination)
+                                if not outliers.empty:
+                                    frac = len(outliers) / max(1, len(df))
+                                    st.info(f"Outliers detectados: {len(outliers)} — {frac:.2%} del dataset")
+                                    st.dataframe(outliers.head(200), use_container_width=True)
+                                else:
+                                    st.success("No se detectaron outliers.")
+
+                            # --------------------
+                            # Clustering
+                            # --------------------
+                            st.subheader("🧩 Clustering (KMeans / MiniBatch)")
+                            if num_cols and len(num_cols) >= 2:
+                                n_clusters = st.slider("Número de clusters", 2, 12, 3, key="nclusters_csv")
+                                df_clusters_vis, model_info = clustering_kmeans(df, num_cols, n_clusters=n_clusters, minibatch=True)
+                                if df_clusters_vis is not None:
+                                    st.info(f"Muestra de {len(df_clusters_vis)} observaciones para visualizar clusters")
+                                    st.dataframe(df_clusters_vis.head(100), use_container_width=True)
+                                    fig_clusters = plot_clusters_pca(df_clusters_vis, model_info[2])
+                                    if fig_clusters:
+                                        st.plotly_chart(fig_clusters, use_container_width=True)
+                                else:
+                                    st.warning("No fue posible realizar clustering.")
+                            else:
+                                st.info("Se requieren al menos 2 columnas numéricas para clustering.")
+
+                        except Exception as e:
+                            st.error(f"Error al procesar CSV: {e}")
+
+                    else:
+                        st.info("Sube un archivo de datos para comenzar el análisis.")
 
         except Exception as e:
             st.error(f"Error al cargar archivo: {e}")
-
-    # Recuperar del session_state si ya se cargó antes
-    df = st.session_state.get('df', None)
-    texto_extraido = st.session_state.get('texto_extraido', "")
-
-    if df is not None and not df.empty:
-        try:
-            with st.spinner("Analizando estructura de datos..."):
-                tipo_df = detectar_tipos(df)
-
-            st.subheader("📊 Tipos de datos detectados")
-            st.dataframe(tipo_df, use_container_width=True)
-
-            # Columnas numéricas y categóricas
-            num_cols = tipo_df[tipo_df["Tipo"] == "Numérica"]["Variable"].tolist()
-            cat_cols = tipo_df[tipo_df["Tipo"] == "Categórica"]["Variable"].tolist()
-
-            st.subheader("📈 Estadísticas descriptivas (numéricas)")
-            st.dataframe(df[num_cols].describe(), use_container_width=True)
-
-            st.subheader("🔍 Visualizaciones automáticas")
-            selected_nums, selected_cat = seleccionar_variables(df, num_cols, cat_cols)
-
-            # Mostrar variables seleccionadas
-            st.markdown("**Variables usadas en gráficas:**")
-            cols_info_left, cols_info_right = st.columns([1, 1])  # Ocupando todo el ancho
-            with cols_info_left:
-                st.write("Numéricas (por varianza):")
-                if selected_nums:
-                    for v in selected_nums:
-                        st.write(f"- {v} (var={df[v].var():.4g})")
-                else:
-                    st.write("- (no hay variables numéricas)")
-
-            with cols_info_right:
-                st.write("Categórica seleccionada:")
-                st.write(f"- {selected_cat}" if selected_cat else "- (no se encontró categórica)")
-
-            # --------------------
-            # Generar gráficos
-            # --------------------
-            for var in selected_nums:
-                fig_h = generar_histograma_claro(df, var)
-                if fig_h:
-                    st.plotly_chart(fig_h, use_container_width=True)
-
-            fig_box = generar_boxplot_claro(df, selected_nums, max_display=6)
-            if fig_box:
-                st.plotly_chart(fig_box, use_container_width=True)
-
-            fig_corr = generar_correlacion_clara(df, num_cols)
-            if fig_corr:
-                st.plotly_chart(fig_corr, use_container_width=True)
-
-            if selected_cat:
-                fig_bar = generar_barras_claras(df, selected_cat, top_n=20)
-                if fig_bar:
-                    st.plotly_chart(fig_bar, use_container_width=True)
-
-            if selected_nums:
-                fig_vb = generar_violin_y_box(df, selected_nums[0])
-                if fig_vb:
-                    st.plotly_chart(fig_vb, use_container_width=True)
-
-            # --------------------
-            # Outliers
-            # --------------------
-            st.subheader("⚠️ Detección de outliers")
-            if selected_nums:
-                contamination = st.slider("Sensibilidad outliers", 0.01, 0.2, 0.05, 0.01, key="contamination_csv")
-                outliers = detectar_outliers(df, selected_nums, contamination)
-                if not outliers.empty:
-                    frac = len(outliers) / max(1, len(df))
-                    st.info(f"Outliers detectados: {len(outliers)} — {frac:.2%} del dataset")
-                    st.dataframe(outliers.head(200), use_container_width=True)
-                else:
-                    st.success("No se detectaron outliers.")
-
-            # --------------------
-            # Clustering
-            # --------------------
-            st.subheader("🧩 Clustering (KMeans / MiniBatch)")
-            if num_cols and len(num_cols) >= 2:
-                n_clusters = st.slider("Número de clusters", 2, 12, 3, key="nclusters_csv")
-                df_clusters_vis, model_info = clustering_kmeans(df, num_cols, n_clusters=n_clusters, minibatch=True)
-                if df_clusters_vis is not None:
-                    st.info(f"Muestra de {len(df_clusters_vis)} observaciones para visualizar clusters")
-                    st.dataframe(df_clusters_vis.head(100), use_container_width=True)
-                    fig_clusters = plot_clusters_pca(df_clusters_vis, model_info[2])
-                    if fig_clusters:
-                        st.plotly_chart(fig_clusters, use_container_width=True)
-                else:
-                    st.warning("No fue posible realizar clustering.")
-            else:
-                st.info("Se requieren al menos 2 columnas numéricas para clustering.")
-
-        except Exception as e:
-            st.error(f"Error al procesar CSV: {e}")
-
-    else:
-        st.info("Sube un archivo de datos para comenzar el análisis.")
 
 # =========================
 # Tab 2: Asistente IA Gemini
