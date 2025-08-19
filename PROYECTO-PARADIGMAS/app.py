@@ -14,6 +14,8 @@ import google.generativeai as genai
 import math
 from plotly.subplots import make_subplots
 
+from matplotlib.colors import to_rgb
+
 
 # --------------------
 # Configuración Streamlit
@@ -129,92 +131,114 @@ def _stats_text(serie: pd.Series) -> str:
     std = serie.std()
     return f"n={n} | mean={mean:.3g} | med={med:.3g} | std={std:.3g}"
 
+# funcion que genera histograma (recibe el DataFrame y las variables numericas seleccionadas).
 def generar_histograma_claro(df: pd.DataFrame, var: str, max_sample=20000):
-    """Histograma claro con líneas de media y mediana y estadísticas claras."""
+    # extrae columna numerica y elimina nulos en caso de tenerlos.
     serie = df[var].dropna()
     if serie.empty:
         return None
     
+    # "si la muestra es <= 20000, se usa completa, de lo contrario se hace una muestra aleatoria de ese tamanho".
     sample = serie if len(serie) <= max_sample else serie.sample(max_sample, random_state=42)
+
+    # limita numero de bins para mejor manejo de Datasets pequenhos.
     n = len(sample)
-    # Ajustar el número de bins para que no sea excesivo en datasets pequeños
     nbins = min(50, max(10, int(math.sqrt(n))))
 
-    mean_val = float(sample.mean())
-    median_val = float(sample.median())
+    mean_val = float(sample.mean()) # calcula media.
+    median_val = float(sample.median()) # calcula mediana.
 
-    # --- Creación del histograma ---
+    # :: inicio GENERACION DEL HISTOGRAMA ::
+    st.markdown(
+        f"<h3 style='text-align: center;'>Histograma de {var}</h3>",
+        unsafe_allow_html=True
+    )
+
     fig = px.histogram(
+        # [x] = columna a graficar
         sample.to_frame(), x=var, nbins=nbins,
-        title=f"Histograma de {var} (n={n})",
         labels={var: var.replace('_', ' ').capitalize()} # Mejora de etiqueta del eje x
     )
 
-    # --- Líneas de media y mediana (sin texto aquí) ---
+    # lineas de media y mediana
     fig.add_vline(x=mean_val, line_dash="dash", line_color="red")
     fig.add_vline(x=median_val, line_dash="dot", line_color="blue")
 
-    # --- Anotaciones de texto separadas para evitar superposición ---
-    # Usamos 'yref="paper"' para posicionar el texto verticalmente
-    # en relación al área del gráfico (0=abajo, 1=arriba).
     fig.add_annotation(
         x=mean_val, y=0.95, yref='paper',
         text=f"Media: {mean_val:.2f}",
         showarrow=False,
         font=dict(color="red", size=12),
-        xshift=10 # Pequeño desplazamiento horizontal para mejor lectura
+        xshift=10
     )
     fig.add_annotation(
         x=median_val, y=0.85, yref='paper',
         text=f"Mediana: {median_val:.2f}",
         showarrow=False,
         font=dict(color="blue", size=12),
-        xshift=-10 # Pequeño desplazamiento en la otra dirección
+        xshift=-10
     )
 
-    # --- Mejoras de estilo y layout ---
+    # :: inicio estilos de histograma ::
+    counts, bins = np.histogram(sample, bins=nbins)
+    norm_counts = counts / counts.max()
+    start_color = np.array(to_rgb("#3C91E6"))
+    end_color = np.array(to_rgb("#7CBEFF"))
+
+    colors = [
+        f"rgb({int(r*255)}, {int(g*255)}, {int(b*255)})"
+        for r,g,b in (start_color + t*(end_color - start_color) for t in norm_counts)
+    ]
+
     hover_template = f"{var}: %{{x}}<br>Conteo: %{{y}}<extra></extra>"
     fig.update_traces(
-        hovertemplate=hover_template,
-        marker_color="lightgreen",
-        opacity=0.8
+        marker_color=colors, 
+        opacity=0.8, 
+        hovertemplate=hover_template
     )
 
     fig.update_layout(
+        title=f"",
         yaxis_title="Conteo",
         bargap=0.05,
         title_font_size=18,
         xaxis_tickangle=-45,
-        plot_bgcolor='rgba(17, 17, 17, 1)',  # Fondo oscuro para contraste
-        paper_bgcolor='rgba(17, 17, 17, 1)',
-        font_color='white',
-        margin=dict(t=80, b=80, l=60, r=60)
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='black',
+        margin=dict(l=20, r=20, t=30, b=20)
     )
+    # :: fin estilos de histograma ::
+
+    # :: fin GENERACION DEL HISTOGRAMA ::
 
     return fig
+
+# funcion que genera box-lot (recibe el DataFrame y las variables numericas seleccionadas).
 def generar_boxplot_claro(df: pd.DataFrame, num_cols: list[str], max_display=6):
-    """
-    Boxplots horizontales para comparación clara entre variables.
-    Excluye variables irrelevantes y normaliza los datos.
-    """
-    # Excluir la variable 'id' si está presente, ya que no es útil para un boxplot
-    filtered_cols = [col for col in num_cols if col.lower() != 'id']
+    filtered_cols = [col for col in num_cols if col.lower() != 'id'] # excluye variable id si hay presente.
     
+    # toma las primeras 6 columnas numericas ya filtradas.
     vars_to_plot = filtered_cols[:max_display]
     data = []
     
-    # Normalizar los datos para una comparación equitativa
+    # selecciona las columnas a graficar y elimina nulos.
     df_normalized = df[vars_to_plot].dropna()
     if df_normalized.empty:
         return None
-        
+
+    # crea un nuevo DataFrame con los datos normalizados (media 0, desviacion estandar 1).      
     scaler = StandardScaler()
     df_scaled = pd.DataFrame(scaler.fit_transform(df_normalized), columns=df_normalized.columns)
 
+    # :: inicio GENERACION DEL BOXLPOT ::
+
+    # recorre las columnas almacenadaos en la variable que se van a graficar.
     for v in vars_to_plot:
         s = df_scaled[v]
         median_orig = df_normalized[v].median()
 
+        # almacena boxplot para cada variable recorrida.
         data.append(go.Box(
             x=s,
             name=v,
@@ -227,14 +251,18 @@ def generar_boxplot_claro(df: pd.DataFrame, num_cols: list[str], max_display=6):
     if not data:
         return None
 
+    # genera la figura con los boxplots guardados con la libreria 'Plotly'.
     fig = go.Figure(data=data)
 
+    # estilos de boxplot
     fig.update_layout(
         title="Boxplots Comparativos (Horizontales) - Datos Normalizados",
         xaxis_title="Valor Normalizado",
         yaxis_title="",
         margin=dict(t=60, l=120)
     )
+
+    # :: fin GENERACION DEL BOXLPOT ::
 
     return fig
 

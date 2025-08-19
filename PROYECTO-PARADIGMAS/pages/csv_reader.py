@@ -93,9 +93,13 @@ with tab1:
                     # guarda el DataFrame en una variable para no tener que cargarlo otra vez.
                     st.session_state['df'] = df
 
+                    # :: inicio MUESTRA BASICA DE DATOS ::
+
                     # especificaciones generales del dataframe y muestra las primeras 10 inserciones en la tabla.
                     st.success(f"Datos cargados: {len(df)} filas × {len(df.columns)} columnas")
                     st.dataframe(df.head(min(10, len(df))), use_container_width=True)
+
+                    # :: fin MUESTRA BASICA DE DATOS ::
 
                     # recupera el DataFrame
                     df = st.session_state.get('df', None)
@@ -106,6 +110,8 @@ with tab1:
                                 # variable que almacena el DataFrame retornado con los tipos de datos del DataFrame original.
                                 tipo_df = detectar_tipos(df)
 
+                            # :: inicio TIPOS DE DATOS DETECTADOS ::
+
                             st.subheader("Tipos de Datos Detectados")
                             # muestra dataframe cargado de la variable [tipo_df]
                             st.dataframe(tipo_df, use_container_width=True)
@@ -113,6 +119,10 @@ with tab1:
                             # almacena en variables las columnas que sean categoricas y las numericas.
                             num_cols = tipo_df[tipo_df["Tipo"] == "Numérica"]["Variable"].tolist()
                             cat_cols = tipo_df[tipo_df["Tipo"] == "Categórica"]["Variable"].tolist()
+
+                            # :: fin TIPOS DE DATOS DETECTADOS ::
+
+                            # :: inicio ESTADISTICAS DESCRIPTIVAS BASICAS ::
 
                             # variable que almacena estadisticas descriptivas basicas.
                             desc = df[num_cols].describe()
@@ -132,6 +142,10 @@ with tab1:
                             # genera DataFrame con estadisticas descriptivas basicas para las columnas numericas del DataFrame original.
                             st.subheader("Estadísticas Descriptivas (Numéricas)")
                             st.dataframe(desc, use_container_width=True)
+
+                            # :: fin ESTADISTICAS DESCRIPTIVAS BASICAS ::
+
+                            # :: inicio VISUALIZACIONES GRAFICAS ::
 
                             st.subheader("Visualizaciones Gráficas")
                             selected_nums, selected_cat = seleccionar_variables(df, num_cols, cat_cols)
@@ -162,14 +176,14 @@ with tab1:
                             tabla = pd.DataFrame(data)
                             st.table(tabla)
 
-                            # --------------------
-                            # Generar gráficos
-                            # --------------------
+                            # :: inicio GENERACION DE GRAFICOS ::
                             for var in selected_nums:
+                                # genera histograma.
                                 fig_h = generar_histograma_claro(df, var)
                                 if fig_h:
                                     st.plotly_chart(fig_h, use_container_width=True)
 
+                            # genera boxplot.
                             fig_box = generar_boxplot_claro(df, selected_nums, max_display=6)
                             if fig_box:
                                 st.plotly_chart(fig_box, use_container_width=True)
