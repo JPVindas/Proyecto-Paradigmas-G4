@@ -18,7 +18,7 @@ from plotly.subplots import make_subplots
 # --------------------
 # Configuración Streamlit
 # --------------------
-genai.configure(api_key="AIzaSyB77sw3lhzRhfRrdFMntOhxRLciX9wuuxU")
+
 
 # Configuración general
 genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")

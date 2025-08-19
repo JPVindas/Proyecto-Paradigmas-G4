@@ -37,7 +37,7 @@ genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")
 # Título
 # =========================
 st.title("🔎 Análisis Automatizado de Datos")
-st.markdown("Sube tu archivo CSV, Excel, PDF, TXT o JSON y descubre insights al instante.")
+st.markdown("Sube tu archivo CSV descubre insights al instante.")
 
 # =========================
 # Función para seleccionar variables representativas
