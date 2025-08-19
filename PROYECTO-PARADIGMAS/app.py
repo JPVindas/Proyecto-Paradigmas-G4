@@ -14,14 +14,23 @@ import google.generativeai as genai
 import math
 from plotly.subplots import make_subplots
 
+
 # --------------------
 # Configuración Streamlit
 # --------------------
 genai.configure(api_key="AIzaSyB77sw3lhzRhfRrdFMntOhxRLciX9wuuxU")
+
+# Configuración general
+genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")
+st.set_page_config(page_title="Análisis Inteligente de Datos", layout="wide")
+st.title("🔎 Análisis Automatizado de Datos")
+st.markdown("Sube tu archivo **CSV, Excel, PDF, TXT o JSON** y descubre insights al instante.")
+
+# Función de resumen robusta
 def resumen_insights(df, num_cols, cat_cols):
-st.set_page_config(page_title="Análisis Inteligente", layout="wide")
-st.title("🔎 Análisis Inteligente de Datos")
-st.markdown("Sube tu archivo **CSV / Excel / JSON / PDF / TXT**. La app hace EDA, detecta outliers, realiza clustering y permite consultar con Gemini (si configuras la API key).")
+    st.set_page_config(page_title="Análisis Inteligente", layout="wide")
+    st.title("🔎 Análisis Inteligente de Datos")
+    st.markdown("Sube tu archivo **CSV / Excel / JSON / PDF / TXT**. La app hace EDA, detecta outliers, realiza clustering y permite consultar con Gemini (si configuras la API key).")
 
 # --------------------
 # UTILIDADES: carga y tipos
