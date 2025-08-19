@@ -12,3 +12,7 @@ pip install PyPDF2
 
 pip install python-docx
 pip install striprtf
+
+// nuevas instalaciones 19 agosto 2025 //
+
+pip install --upgrade google.generativeai

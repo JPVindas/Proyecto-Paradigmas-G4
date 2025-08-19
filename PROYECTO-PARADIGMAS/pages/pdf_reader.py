@@ -158,7 +158,7 @@ with tab2:
                 st.error(f"Error al comunicarse con Gemini: {e}")
     else:
         st.markdown(
-            "<p style='text-align: center;'>/// Primero sube un archivo de datos o texto en la pestaña 'Análisis automático' para habilitar el asistente Gemini. ///</p>",
+            "<p style='text-align: center;'>/// Primero sube un documento en la pestaña 'Análisis automático' para habilitar el asistente Gemini. ///</p>",
             unsafe_allow_html=True
         )
 # :: fin ESTRUCTURA TAB2 ::
