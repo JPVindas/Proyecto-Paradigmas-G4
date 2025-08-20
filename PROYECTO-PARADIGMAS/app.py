@@ -266,26 +266,30 @@ def generar_boxplot_claro(df: pd.DataFrame, num_cols: list[str], max_display=6):
 
     return fig
 
+# funcion que genera diagrama de correlacion (recibe el DataFrame y las variables numericas seleccionadas).
 def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=5000):
-    """
-    Genera una matriz de correlación simplificada o un gráfico de barras de los pares
-    más correlacionados, dependiendo de la cantidad de variables.
-    """
+    # si hay menos de 2 columas numericas no se puede hacer correlacion.
     if len(num_cols) < 2:
         return None
 
+    # extrae muestra de columnas numericas y elimina nulos en caso de tenerlos.
     sample = df[num_cols].dropna()
     if sample.empty:
         return None
+    
+    # si la muestra es mayor a 5000 inserciones, se hace una muestra aleatoria.
     if len(sample) > sample_max:
         sample = sample.sample(sample_max, random_state=42)
     
+    # calcula matriz de correlacion entre las columnas de la muestra.
     corr = sample.corr()
 
-    # Si hay muchas variables, nos enfocamos en las más relevantes
+    # "si hay mas de 20 columnas numericas..."
     if len(num_cols) > 20:
-        # Seleccionamos las 10 variables con la correlación absoluta promedio más alta
+        # calcula la media de los valores absolutos de la correlacion de la variable y los ordena de forma descendente.
         mean_abs_corr = corr.abs().mean().sort_values(ascending=False)
+
+        # se seleccionan las 10 más correlacionables en promedio.
         top_10_vars = mean_abs_corr.head(10).index.tolist()
         corr_filtered = corr.loc[top_10_vars, top_10_vars]
         title_text = f"Análisis de Correlación (Top 10 variables más correlacionadas, n={len(sample)})"
@@ -353,7 +357,6 @@ def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=
     )
 
     return fig
-
 
 def generar_barras_claras(df: pd.DataFrame, var: str, top_n=15):
     """Barras categóricas ordenadas por frecuencia con porcentaje y porcentaje acumulado."""

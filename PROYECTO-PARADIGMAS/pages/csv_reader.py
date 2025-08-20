@@ -69,6 +69,30 @@ def seleccionar_variables(df, num_cols, cat_cols):
 
 # :: fin FUNC SELECT VARIABLES REPRESENTATIVAS ::
 
+# :: inicio FUNC SELECT VARIABLE OBJETIVO ::
+def seleccionar_objetivo(df: pd.DataFrame):
+    # selecciona ultima columna (variable objetivo).
+    target_col = df.columns[-1]
+    
+    # si no es categorica, no filtra.
+    if not pd.api.types.is_categorical_dtype(df[target_col]) and not df[target_col].dtype == "object":
+        st.warning(f"La última columna ('{target_col}') no parece ser categórica. No se aplicará filtro.")
+        return df, None
+    
+    # seleccion de categorias unicas para el usuario.
+    st.subheader(f"Variable Objetivo: {target_col}")
+    categorias = df[target_col].dropna().unique().tolist() # almacena categoias en variable
+    selected_cat = st.selectbox("Selecciona la categoría con la que deseas trabajar:", categorias) # selectbox con las categorias.
+    
+    # target_col = categoria seleccionada por el usuario.
+    # actualiza el target_col de todas las funciones.
+    df_filtrado = df[df[target_col] == selected_cat]
+    
+    st.info(f"Trabajando con categoría **{selected_cat}** ({len(df_filtrado)} filas)")
+    
+    return df_filtrado, selected_cat
+
+# :: inicio FUNC SELECT VARIABLE OBJETIVO ::
 
 tab1, tab2 = st.tabs(["Análisis automático", "Asistente IA (Gemini)"])
 
@@ -103,6 +127,8 @@ with tab1:
 
                     # recupera el DataFrame
                     df = st.session_state.get('df', None)
+
+                    df, categoria_objetivo = seleccionar_objetivo(df)
 
                     if df is not None and not df.empty:
                         try:
