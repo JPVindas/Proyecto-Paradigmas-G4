@@ -25,8 +25,6 @@ from matplotlib.colors import to_rgb
 # Configuración general
 genai.configure(api_key="AIzaSyDzzTT-tQLGAFlEVJJx0_Uhir-TbATgVyc")
 st.set_page_config(page_title="Análisis Inteligente de Datos", layout="wide")
-st.title("🔎 Análisis Automatizado de Datos")
-st.markdown("Sube tu archivo **CSV, Excel, PDF, TXT o JSON** y descubre insights al instante.")
 
 # Función de resumen robusta
 def resumen_insights(df, num_cols, cat_cols):
@@ -291,18 +289,23 @@ def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=
 
         # se seleccionan las 10 más correlacionables en promedio.
         top_10_vars = mean_abs_corr.head(10).index.tolist()
+
+        # reduce la matriz a las 10 variables seleccionadas.
         corr_filtered = corr.loc[top_10_vars, top_10_vars]
+
         title_text = f"Análisis de Correlación (Top 10 variables más correlacionadas, n={len(sample)})"
     else:
         corr_filtered = corr
         title_text = f"Análisis de Correlación (n={len(sample)})"
 
-    # Máscara para mostrar solo el triángulo inferior
+    # almacena mascara con forma de matriz de correlacion de traingulo inferior para no duplicar info.
     mask = np.triu(np.ones_like(corr_filtered, dtype=bool))
     corr_masked = corr_filtered.mask(mask)
 
-    # Calcular los pares con mayor correlación
+    # calcula matriz de correlacion en valor absoluto (excluye redundancia).
     c_abs = corr.abs().where(~np.eye(len(corr), dtype=bool))
+
+    # lista donde se guardan los pares con mayor correlacion.
     top_pairs = []
     if not c_abs.empty:
         stacked = c_abs.stack().sort_values(ascending=False)
@@ -312,14 +315,14 @@ def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=
             if len(top_pairs) >= 5:
                 break
     
-    # Crear los subgráficos
+    # creacion de subgraficos.
     fig = make_subplots(
         rows=1, cols=2,
         column_widths=[0.6, 0.4],
         subplot_titles=("Matriz de Correlación (Triángulo Inferior)", "Top 5 Pares Más Correlacionados")
     )
 
-    # Gráfico de calor (heatmap)
+    # grafico de heatmap.
     heatmap_fig = px.imshow(
         corr_masked,
         text_auto='.2f',
@@ -330,7 +333,7 @@ def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=
     )
     fig.add_trace(heatmap_fig.data[0], row=1, col=1)
 
-    # Gráfico de barras de los pares principales
+    # grafico de barras de los pares principales
     if top_pairs:
         labels = [f"{a} <-> {b}" for a, b, val in top_pairs[::-1]]
         values = [val for a, b, val in top_pairs[::-1]]
@@ -347,7 +350,7 @@ def generar_correlacion_clara(df: pd.DataFrame, num_cols: list[str], sample_max=
         
         fig.add_trace(bar_fig.data[0], row=1, col=2)
 
-    # Actualizar el diseño general
+    # disenho layout
     fig.update_layout(
         title_text=title_text,
         height=600,
@@ -507,214 +510,3 @@ def clustering_kmeans(df: pd.DataFrame, num_cols: list[str],
     explained = pca.explained_variance_ratio_
     return df_vis, (model, scaler, explained)
 # ==========================================================
-
-
-# --------------------
-# INTERFAZ PRINCIPAL (Tabs)
-# --------------------
-tab1, tab2 = st.tabs(["Análisis automático", "🤖 Asistente IA"])
-
-with tab1:
-    archivo = st.file_uploader("Sube CSV, Excel, JSON, PDF o TXT", type=["csv", "xlsx", "json", "pdf", "txt"])
-    df = None
-    texto_extraido = ""
-
-    if archivo:
-        name = archivo.name.lower()
-        try:
-            if name.endswith((".csv", ".xlsx", ".json")):
-                with st.spinner("Cargando datos..."):
-                    df = cargar_dataframe(archivo)
-                    st.success(f"Datos cargados: {len(df)} filas × {len(df.columns)} columnas")
-                    st.session_state['df'] = df
-                    st.dataframe(df.head(min(10, len(df))))
-            elif name.endswith(".pdf"):
-                with st.spinner("Extrayendo texto de PDF..."):
-                    texto_extraido = extraer_texto_pdf(archivo)
-                    st.session_state['texto_extraido'] = texto_extraido
-                    st.text_area("Texto extraído (preview)", value=texto_extraido[:3000], height=200)
-            else:  # TXT
-                try:
-                    contenido = archivo.read().decode('utf-8', errors='ignore')
-                except Exception:
-                    contenido = str(archivo.getvalue())
-                st.session_state['texto_extraido'] = contenido
-                st.text_area("Contenido (preview)", value=contenido[:3000], height=200)
-        except Exception as e:
-            st.error(f"Error al cargar archivo: {e}")
-
-    # Si no se sube archivo, comprobar session_state
-    df = st.session_state.get('df', None)
-    texto_extraido = st.session_state.get('texto_extraido', "")
-
-    if df is not None and not df.empty:
-        # Detectar tipos
-        with st.spinner("Analizando estructura de datos..."):
-            tipo_df = detectar_tipos(df)
-        st.subheader("📊 Tipos de datos detectados")
-        st.dataframe(tipo_df, use_container_width=True)
-
-        # Columnas numéricas y categóricas
-        num_cols = tipo_df[tipo_df["Tipo"] == "Numérica"]["Variable"].tolist()
-        cat_cols = tipo_df[tipo_df["Tipo"] == "Categórica"]["Variable"].tolist()
-
-        st.subheader("📈 Estadísticas descriptivas (numéricas)")
-        try:
-            st.dataframe(df[num_cols].describe(), use_container_width=True)
-        except Exception:
-            st.dataframe(df.describe(include='all'), use_container_width=True)
-
-        st.subheader("🔍 Visualizaciones mejoradas y claras")
-
-        # Elegir variables representativas para mostrar (si hay muchas, seleccionamos top por varianza)
-        if num_cols:
-            var_varianza = df[num_cols].var().sort_values(ascending=False)
-            selected_nums = var_varianza.index[:min(3, len(var_varianza))].tolist()
-        else:
-            selected_nums = []
-
-        # Para categórica, usar la que tenga más valores no nulos y <= 50 categorías (si existe)
-        selected_cat = None
-        best_nonnull = -1
-        for c in cat_cols:
-            non_null = df[c].notna().sum()
-            unique_ct = df[c].nunique(dropna=True)
-            if unique_ct <= 50 and non_null > best_nonnull:
-                selected_cat = c
-                best_nonnull = non_null
-
-        # Mostrar qué variables se han seleccionado automáticamente
-        st.markdown("**Variables usadas en las gráficas (selección automática):**")
-        cols_info_left, cols_info_right = st.columns(2)
-        with cols_info_left:
-            st.write("Numéricas (por varianza):")
-            if selected_nums:
-                for v in selected_nums:
-                    st.write(f"- {v} (var={df[v].var():.4g})")
-            else:
-                st.write("- (no hay variables numéricas detectadas)")
-        with cols_info_right:
-            st.write("Categórica seleccionada:")
-            st.write(f"- {selected_cat}" if selected_cat else "- (no se encontró categórica adecuada)")
-
-        # 1) Histogramas individuales (para cada selected_num)
-        for var in selected_nums:
-            fig_h = generar_histograma_claro(df, var)
-            if fig_h:
-                st.plotly_chart(fig_h, use_container_width=True)
-
-        # 2) Boxplots comparativos
-        fig_box = generar_boxplot_claro(df, selected_nums, max_display=6)
-        if fig_box:
-            st.plotly_chart(fig_box, use_container_width=True)
-
-        # 3) Correlación (si hay al menos 2 numéricas)
-        fig_corr = generar_correlacion_clara(df, num_cols)
-        if fig_corr:
-            st.plotly_chart(fig_corr, use_container_width=True)
-
-        # 4) Barras categóricas (clara)
-        if selected_cat:
-            fig_bar = generar_barras_claras(df, selected_cat, top_n=20)
-            if fig_bar:
-                st.plotly_chart(fig_bar, use_container_width=True)
-
-        # 5) Violin + Box para la primera variable numérica (si existe)
-        if selected_nums:
-            fig_vb = generar_violin_y_box(df, selected_nums[0])
-            if fig_vb:
-                st.plotly_chart(fig_vb, use_container_width=True)
-
-        # --------------------
-        # Análisis avanzado: Outliers
-        # --------------------
-        st.subheader("⚠️ Detección de outliers (IsolationForest)")
-        if selected_nums and len(selected_nums) >= 1:
-            contamination = st.slider("Sensibilidad outliers (contamination)", 0.01, 0.2, 0.05, 0.01, key="contamination_slider")
-            with st.spinner("Detectando outliers..."):
-                outliers = detectar_outliers(df, selected_nums, contamination=contamination)
-            if not outliers.empty:
-                frac = len(outliers) / max(1, len(df))
-                st.info(f"Outliers detectados: {len(outliers)} — {frac:.2%} del dataset (según las variables usadas)")
-                st.dataframe(outliers.head(200))
-            else:
-                st.success("No se detectaron outliers con los parámetros actuales.")
-        else:
-            st.info("Se requieren columnas numéricas para detección de outliers.")
-
-        # --------------------
-        # Análisis avanzado: Clustering
-        # --------------------
-        st.subheader("🧩 Clustering (KMeans / MiniBatchKMeans) — visualización PCA 2D")
-        if num_cols and len(num_cols) >= 2:
-            n_clusters = st.slider("Número de clusters", 2, 12, 3, key="nclusters_slider")
-            use_minibatch = st.checkbox("Usar MiniBatchKMeans (recomendado para datasets grandes)", value=True, key="use_minibatch")
-            with st.spinner("Calculando clusters (esto puede tardar en datasets grandes)..."):
-                var_var = df[num_cols].var().sort_values(ascending=False)
-                cluster_cols = var_var.index[:min(12, len(var_var))].tolist()  # limitar a 12 columnas para estabilidad
-                df_clusters_vis, model_info = clustering_kmeans(df, cluster_cols, n_clusters=n_clusters, minibatch=use_minibatch)
-            if df_clusters_vis is not None:
-                st.info(f"Muestra de {len(df_clusters_vis)} observaciones usadas para visualizar clusters")
-                st.dataframe(df_clusters_vis.head(100))
-                fig_clusters = plot_clusters_pca(df_clusters_vis, model_info[2])
-                if fig_clusters:
-                    st.plotly_chart(fig_clusters, use_container_width=True)
-            else:
-                st.warning("No fue posible realizar clustering con las columnas seleccionadas (datos insuficientes).")
-        else:
-            st.info("Se requieren al menos 2 columnas numéricas para clustering.")
-
-    else:
-        st.info("Carga un archivo (CSV/Excel/JSON) para generar análisis y visualizaciones.")
-
-
-
-
-# ==========================================================
-# ======== Tab 1: Análisis Automático =========
-
-with tab1:
-    st.write("Carga un archivo (CSV/Excel/JSON) para generar análisis y visualizaciones.")
-
-# ==========================================================
-# ======== Tab 2: Asistente IA Gemini =========
-
-with tab2:
-    st.markdown("## 🤖 Asistente Inteligente (Gemini)")
-
-    df = st.session_state.get('df', None)
-    texto_extraido = st.session_state.get('texto_extraido', None)
-
-    if (df is not None and not df.empty) or (texto_extraido is not None and len(texto_extraido.strip()) > 0):
-        st.write("Hazle preguntas a la IA sobre tu archivo. Ejemplos:")
-        st.markdown("- Para datos tabulares: '¿Qué variables parecen estar más relacionadas?'\n"
-                    "- Para texto/pdf: '¿Cuáles son los temas principales?' o 'Hazme un resumen.'")
-
-        pregunta = st.text_area("Pregunta para Gemini:", placeholder="¿Qué observas en los datos o en el texto?", key="pregunta_gemini")
-
-        if st.button("Preguntar a Gemini"):
-            if df is not None and not df.empty:
-                muestra = df.head(10).to_csv(index=False)
-                prompt = (
-                    f"Tengo este dataset en formato CSV:\n{muestra}\n"
-                    f"Pregunta: {pregunta}\nPor favor, responde como si fueras un analista de datos profesional."
-                )
-            elif texto_extraido:
-                prompt = (
-                    f"Tengo el siguiente texto extraído de un archivo (puede ser PDF, TXT, etc):\n"
-                    f"{texto_extraido[:3000]}\n"
-                    f"Pregunta: {pregunta}\nPor favor, responde de manera concisa y profesional."
-                )
-            else:
-                st.warning("No hay datos ni texto cargado para enviar a la IA.")
-                st.stop()
-
-            try:
-                modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-                respuesta = modelo.generate_content(prompt)
-                st.write("**Respuesta de Gemini:**")
-                st.success(respuesta.text)
-            except Exception as e:
-                st.error(f"Error al comunicarse con Gemini: {e}")
-    else:
-        st.info("Primero sube un archivo de datos o texto en la pestaña 'Análisis automático' para habilitar el asistente Gemini.")
