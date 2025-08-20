@@ -269,45 +269,56 @@ with tab1:
         except Exception as e:
             st.error(f"Error al cargar archivo: {e}")
 
-# =========================
-# Tab 2: Asistente IA Gemini
-# =========================
+#:: fin ESTRUCTURA TAB2
+
+#:: inicio ESTRUCTURA TAB1 ::
 with tab2:
-    st.markdown("## 🤖 Asistente Inteligente (Gemini)")
+    st.markdown(
+        "<h2 style='text-align: center;'>Asistente Personal - Gemini 1.5</h2>", 
+        unsafe_allow_html=True
+    )
 
     df = st.session_state.get('df', None)
-    texto_extraido = st.session_state.get('texto_extraido', None)
 
-    if (df is not None and not df.empty) or (texto_extraido is not None and len(texto_extraido.strip()) > 0):
-        st.write("Hazle preguntas a la IA sobre tu archivo. Ejemplos:")
-        st.markdown("- Para datos tabulares: '¿Qué variables parecen estar más relacionadas?'\n"
-                    "- Para texto/pdf: '¿Cuáles son los temas principales?' o 'Hazme un resumen.'")
+    if (df is not None and not df.empty):
+        st.markdown(
+            "<p style='text-align: center;'>Realiza preguntas a <span style='font-style: italic;'>Gemini</span> para obtener el mejor entendimiento de la información del archivo insertado.</p>",
+            unsafe_allow_html=True
+        )
 
-        pregunta = st.text_area("Pregunta para Gemini:", placeholder="¿Qué observas en los datos o en el texto?", key="pregunta_gemini")
+        # cuadro de texto donde usuario ingresará la pregunta.
+        pregunta = st.text_input("Pregunta para Gemini:", placeholder="¿Qué observas en los datos o en el texto?", key="pregunta_gemini")
 
         if st.button("Preguntar a Gemini"):
             if df is not None and not df.empty:
-                muestra = df.head(10).to_csv(index=False)
+                muestra = df.to_csv(index=False)
                 prompt = (
-                    f"Tengo este dataset en formato CSV:\n{muestra}\n"
+                    f"Tengo este dataset (peude ser formato .CSV, .XLS, .XLSX):\n{muestra}\n"
                     f"Pregunta: {pregunta}\nPor favor, responde como si fueras un analista de datos profesional."
-                )
-            elif texto_extraido:
-                prompt = (
-                    f"Tengo el siguiente texto extraído de un archivo:\n"
-                    f"{texto_extraido[:3000]}\n"
-                    f"Pregunta: {pregunta}\nPor favor, responde de manera concisa y profesional."
+                    f"Nunca me des código, necesito que leas todos los datos de todas las columnas a no ser que"
+                    f"se te solicite lo contrario. Responde con tablas y bulltepoints si hace falta."
                 )
             else:
                 st.warning("No hay datos ni texto cargado para enviar a la IA.")
                 st.stop()
 
             try:
-                modelo = genai.GenerativeModel('gemini-1.5-flash')
+                modelo = genai.GenerativeModel('models/gemini-1.5-flash-latest')
                 respuesta = modelo.generate_content(prompt)
-                st.write("**Respuesta de Gemini:**")
-                st.success(respuesta.text)
+                st.markdown(
+                    "<h3 style='text-align: center;'>Respuesta de Gemini 1.5</h3>", 
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<div style='text-align: justify;'>{respuesta.text}</div>",
+                    unsafe_allow_html=True
+                )
             except Exception as e:
                 st.error(f"Error al comunicarse con Gemini: {e}")
     else:
-        st.info("Primero sube un archivo de datos o texto en la pestaña 'Análisis automático' para habilitar el asistente Gemini.")
+       st.markdown(
+            "<p style='text-align: center;'>/// Primero sube un documento en la pestaña 'Análisis automático' para habilitar el asistente Gemini. ///</p>",
+            unsafe_allow_html=True
+        )
+# :: fin ESTRUCTURA TAB2 ::
+
